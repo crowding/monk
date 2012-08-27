@@ -572,3 +572,5 @@ if __name__ == "__main__":
     ##flags differ.
 
     ##4. Maybe more warnings/errors for nonsensical flags or combinations of flags.
+
+    ##5. Go ahead and escape all command line components when writing the Makefile.
