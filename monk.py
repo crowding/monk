@@ -239,7 +239,6 @@ class MatchedCommand(Command):
             "{phony_rule}"
             "{intermediate_rule}"
             "{listing_rule}"
-            "{update_targets}"
             ).format(**
                 { 'products'          : " ".join(set(self.products()))
                 , 'dependencies'      : " ".join(set(self.dependencies()))
@@ -249,9 +248,6 @@ class MatchedCommand(Command):
                 , 'intermediate_rule' : self.intermediateRule()
                 , 'mkdir_if_necessary': self.mkdirCommands() if self.commandLine() else ""
                 , 'listing_rule'      : self.listingRule()
-                , 'update_targets'    : ('ALL_TARGETS += $(filter-out $(ALL_TARGETS), {0})\n\n'
-                                         .format(" ".join(self.products()
-                                                          + self.dependencies())))
                 })
 
     def listingRule(self):
