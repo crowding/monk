@@ -251,7 +251,7 @@ class MatchedCommand(Command):
 
     def touchTag(self, tagdir):
         if self.isTagged():
-            return ((" && " if self.commandLine() else ())
+            return ((" && " if self.commandLine() else "\t")
                     + "touch {0}".format(
                         " ".join(set(self.taggedProducts(tagdir)))))
         else:
@@ -279,10 +279,7 @@ class MatchedCommand(Command):
                 , 'touch_tag'         : self.touchTag(tagdir)
                 , 'phony_rule'        : self.phonyRule()
                 , 'intermediate_rule' : self.intermediateRule()
-                , 'mkdir_if_necessary': (
-                      self.mkdirCommands(tagdir)
-                      if self.commandLine()
-                      else "")
+                , 'mkdir_if_necessary': self.mkdirCommands(tagdir)
                 , 'listing_rule'      : self.listingRule()
                 , 'tagfile_rule'      : self.tagfileRule(tagdir)
                 })
@@ -293,8 +290,8 @@ class MatchedCommand(Command):
             tagged = self.taggedProducts(tagdir)
             return (
                 "{untagged}: {tagged}\n\n".format(
-                    untagged = " ".join(untagged),
-                    tagged =   " ".join(tagged)))
+                    untagged = " ".join(set(untagged)),
+                    tagged =   " ".join(set(tagged))))
         else:
             return ""
 
@@ -313,7 +310,11 @@ class MatchedCommand(Command):
             targets.extend(self.taggedProducts(tagdir))
         dirs = [os.path.split(x)[0] for x in targets]
         if dirs:
-            return "\t" + "\n\t".join(["mkdir -p {0}".format(i) for i in dirs if i != ""]) + "\n"
+            return ("\t"
+                    + "\n\t".join(["mkdir -p {0}".format(i)
+                                         for i in set(dirs)
+                                         if i != ""])
+                    + "\n")
         else:
             return ""
 
