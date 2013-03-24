@@ -1,6 +1,6 @@
                                         #!/usr/bin/env python
 from __future__ import print_function
-import re, os, argparse, string, glob, copy
+import re, os, argparse, string, glob, copy, shlex
 
 longhelp = """
 makemake [--command [FLAG COMMAND_WORD]* ]* --files [FILENAME]*
@@ -300,7 +300,7 @@ def unique(seq, idfun=id):
         result.append(item)
     return result
 
-def generateRules(files, commands, maxdepth, maxfiles, verbose=False):
+def generateRules(files, commands, maxdepth, maxfiles, tagdir, verbose=False):
     files = list(files)
 
     ##track the commands used to generate each target.
@@ -379,7 +379,6 @@ def generateRules(files, commands, maxdepth, maxfiles, verbose=False):
 
 class ShlexArgParser(argparse.ArgumentParser):
     def convert_arg_line_to_args(self, arg_line):
-        import shlex
         return shlex.split(arg_line, comments=True)
 
 def makeparser():
@@ -505,7 +504,7 @@ def test():
     && touch --output dbtickets/{0}.out
     --phony --invisible dbupdated
 
-    --command doTheThing --input --pools/(.*)\.collected
+    --command doTheThing --input --match pools/(.*)\.collected
     --output --mkdir graphs/{0}.graph1.out
     --output --mkdir graphs/{0}.graph2.out
 
@@ -550,10 +549,10 @@ def testBreadth():
                 '--files test.a')
     goFromString(testargs)
 
-
 def goFromString(str):
+    args = shlex.split(str, comments=True)
     parser = makeparser()
-    ns = parser.parse_args(re.split(" +", str), namespace=argparse.Namespace(commands=[]))
+    ns = parser.parse_args(args, namespace=argparse.Namespace(commands=[]))
     go(**ns.__dict__)
 
 def go(**kwargs):
