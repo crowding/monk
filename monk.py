@@ -205,6 +205,12 @@ def getList(listfile):
         return []
 
 class MatchedCommand(Command):
+    def setTagged(self):
+        outputs = [word for word in self.words if word.output]
+        if len(outputs) > 1:
+            for output in outputs:
+                output.tagfile = True
+
     def products(self):
         listed = [i
                   for word in self.words
@@ -551,7 +557,7 @@ def test():
 
     --command doTheThing --input --match pools/(.*)\\\\.collected
     --output --mkdir graphs/{0}.graph1.out
-    --output --mkdir --tagfile graphs/{0}.graph2.out
+    --output --mkdir graphs/{0}.graph2.out
 
     --command --once --input --match graphs/(.*).graph
     --output --once graphs/grouped.graph
@@ -603,6 +609,8 @@ def goFromString(str):
 def go(**kwargs):
     kwargs.pop("")
     rules = generateRules(**kwargs)
+    for r in rules:
+        r.setTagged()
     [print(i.makeRule(**kwargs)) for i in rules]
 
 if __name__ == "__main__":
