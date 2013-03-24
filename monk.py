@@ -1,4 +1,4 @@
-                                        #!/usr/bin/env python
+#!/usr/bin/env python
 from __future__ import print_function
 import re, os, argparse, string, glob, copy, shlex
 
@@ -114,8 +114,9 @@ class _AttributeHolder(object):
 class Word(_AttributeHolder):
     """A component of a rule, has a pattern and a number of flags."""
     def __init__(self, pattern = "", pattern__ = None, match = False,
-                 input = False, output=False, listing=False, once=False,
-                 phony=False, intermediate=False, invisible=False, mkdir=False):
+                 input = False, output = False, listing = False, once = False,
+                 phony = False, intermediate = False, invisible = False,
+                 mkdir = False, tagfile = False):
         self.pattern      = pattern
         self.pattern__    = pattern__
         self.match        = match
@@ -127,6 +128,7 @@ class Word(_AttributeHolder):
         self.mkdir        = mkdir
         self.intermediate = intermediate
         self.invisible    = invisible
+        self.tagfile      = tagfile
 
 class UnmatchedWord(Word):
     def tryMatch(self, filename):
@@ -210,6 +212,14 @@ class MatchedCommand(Command):
                   for i in getList(word.word)]
         return listed + [word.word for word in self.words if word.output]
 
+    def taggedProducts(self, tagdir):
+        if self.isTagged():
+            #replicating the the first output will suffice.
+            firstOutput = [word for word in self.words if word.output][0]
+            return [os.path.join(tagdir, firstOutput.word)]
+        else:
+            return self.products()
+
     def dependencies(self):
         listed = [i
                   for word in self.words
@@ -218,8 +228,9 @@ class MatchedCommand(Command):
         return listed + [word.word for word in self.words if word.input]
 
     def merge(self, *others):
-        ##add the words in order. If "once" is used, the first word determines the flags.
-        ##And "once" must be marked on the first word
+        ##add the words in order. If "once" is used, the first word
+        ##determines the flags.  And "once" must be marked on the
+        ##first word
         wordsSeen = {}
         words = []
         for word in sum([x.words for x in [self] + list(others)], []):
@@ -229,26 +240,57 @@ class MatchedCommand(Command):
                     wordsSeen[word.word] = word
         self.words = words
 
+    def isTagged(self):
+        return any([word.tagfile for word in self.words if word.output])
 
-    def makeRule(self):
+    def touchTag(self, tagdir):
+        if self.isTagged():
+            return ((" && " if self.commandLine() else ())
+                    + "touch {0}".format(
+                        " ".join(set(self.taggedProducts(tagdir)))))
+        else:
+            return ""
+
+    def makeRule(self, tagdir, **kwargs):
         return (
             "{products}: {dependencies}\n"
             "{mkdir_if_necessary}"
-            "{command_indent}{command}\n"
+            "{command_indent}{command}{touch_tag}\n"
             "\n"
             "{phony_rule}"
             "{intermediate_rule}"
             "{listing_rule}"
+            "{tagfile_rule}"
             ).format(**
-                { 'products'          : " ".join(set(self.products()))
+                { 'products'          : (
+                         " ".join(set(self.taggedProducts(tagdir))))
                 , 'dependencies'      : " ".join(set(self.dependencies()))
-                , 'command_indent'    : "\t" if False in [bool(i.invisible) for i in self.words] else ""
+                , 'command_indent'    : (
+                      "\t"
+                      if False in [bool(i.invisible) for i in self.words]
+                      else "")
                 , 'command'           : self.commandLine()
+                , 'touch_tag'         : self.touchTag(tagdir)
                 , 'phony_rule'        : self.phonyRule()
                 , 'intermediate_rule' : self.intermediateRule()
-                , 'mkdir_if_necessary': self.mkdirCommands() if self.commandLine() else ""
+                , 'mkdir_if_necessary': (
+                      self.mkdirCommands(tagdir)
+                      if self.commandLine()
+                      else "")
                 , 'listing_rule'      : self.listingRule()
+                , 'tagfile_rule'      : self.tagfileRule(tagdir)
                 })
+
+    def tagfileRule(self, tagdir):
+        if self.isTagged():
+            untagged = self.products()
+            tagged = self.taggedProducts(tagdir)
+            return (
+                "{untagged}: {tagged}\n\n".format(
+                    untagged = " ".join(untagged),
+                    tagged =   " ".join(tagged)))
+        else:
+            return ""
 
     def listingRule(self):
         if [w for w in self.words if w.listing]:
@@ -259,8 +301,10 @@ class MatchedCommand(Command):
         else:
             return ""
 
-    def mkdirCommands(self):
+    def mkdirCommands(self, tagdir):
         targets = [word.word for word in self.words if word.mkdir]
+        if (self.isTagged()):
+            targets.extend(self.taggedProducts(tagdir))
         dirs = [os.path.split(x)[0] for x in targets]
         if dirs:
             return "\t" + "\n\t".join(["mkdir -p {0}".format(i) for i in dirs if i != ""]) + "\n"
@@ -300,7 +344,7 @@ def unique(seq, idfun=id):
         result.append(item)
     return result
 
-def generateRules(files, commands, maxdepth, maxfiles, tagdir, verbose=False):
+def generateRules(files, commands, maxdepth, maxfiles, verbose=False, **kwargs):
     files = list(files)
 
     ##track the commands used to generate each target.
@@ -332,7 +376,8 @@ def generateRules(files, commands, maxdepth, maxfiles, tagdir, verbose=False):
                 targetsWereCovered = unique([i
                                              for c in previousCommands
                                              for i in c.products()])
-                [commandsDict.pop(i) for i in unique(targetsWereCovered, lambda a:a)]
+                [commandsDict.pop(i)
+                 for i in unique(targetsWereCovered, lambda a:a)]
 
                 if len(previousCommands) > 0:
                     mergedCommand = previousCommands[0]
@@ -487,7 +532,7 @@ def test():
     --command
     --once --input ./aggregate.R
     --once --output --mkdir pools/{0}.collected
-    --match --input datafiles/([^.]*)\.(.*).txt
+    --match --input datafiles/([^.]*)\\\\..*\\\\.txt
     --invisible --phony --once aggregates
 
     --command
@@ -496,17 +541,17 @@ def test():
     %--option=./compensate.for.monkey2.R
 
     --command --input ./tosql
-    --match --input datafiles/(.*)\.txt
+    --match --input datafiles/(.*)\\\\.txt
     --output --intermediate sqlfiles/{0}.sql
 
     --command --input ./dbshove.R database.db
-    --match --input sqlfiles/(.*)\.sql
+    --match --input sqlfiles/(.*)\\\\.sql
     && touch --output dbtickets/{0}.out
     --phony --invisible dbupdated
 
-    --command doTheThing --input --match pools/(.*)\.collected
+    --command doTheThing --input --match pools/(.*)\\\\.collected
     --output --mkdir graphs/{0}.graph1.out
-    --output --mkdir graphs/{0}.graph2.out
+    --output --mkdir --tagfile graphs/{0}.graph2.out
 
     --command --once --input --match graphs/(.*).graph
     --output --once graphs/grouped.graph
@@ -558,7 +603,7 @@ def goFromString(str):
 def go(**kwargs):
     kwargs.pop("")
     rules = generateRules(**kwargs)
-    [print(i.makeRule()) for i in rules]
+    [print(i.makeRule(**kwargs)) for i in rules]
 
 if __name__ == "__main__":
     parser = makeparser()
@@ -581,6 +626,8 @@ if __name__ == "__main__":
     ##3. Give a warning when combining words with --once if any of the
     ##flags differ.
 
-    ##4. Maybe more warnings/errors for nonsensical flags or combinations of flags.
+    ##4. Maybe more warnings/errors for nonsensical flags or
+    ##   combinations of flags.
 
-    ##5. Go ahead and escape all command line components when writing the Makefile.
+    ##5. Go ahead and escape all command line components when writing
+    ##   the Makefile.
