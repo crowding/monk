@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+                                        #!/usr/bin/env python
 from __future__ import print_function
 import re, os, argparse, string, glob, copy
 
@@ -12,7 +12,7 @@ pipelines. The intent is also to be simpler to understand, use, and
 debug than the equivalent Makefiles would be, but not to cover every
 possible situation that a build system might encounter.
 
---command marks the beginning of a command rule. 
+--command marks the beginning of a command rule.
 
 Each subsequent word is an word to construct the command line. These
 are all either regexps (if flagged with --match) or regexp
@@ -33,10 +33,10 @@ rule. Therefore if an argument is named twice while matching rules,
 the command lines are combined, respecting the 'once' flag. For
 example, the rule
 
---command 
---once --input ./aggregate.R 
+--command
+--once --input ./aggregate.R
 --once %-o --once --output 'pools/{0}.collected'
---match --input 'datafiles/([^.]*)\.(.*).txt' 
+--match --input 'datafiles/([^.]*)\.(.*).txt'
 
 will make rules that that have dependencies of the form
 datafiles/PREFIX.INFIX.txt, and create products of the form
@@ -62,7 +62,7 @@ monkey2.thursday.txt ./aggregate.R
          monkey2.thursday.txt
 
 pools/monkey3.collected: monkey3.friday.txt ./aggregate.R
-	 ./aggregate.R -o pools/monkey3.collected monkey3.friday.txt 
+	 ./aggregate.R -o pools/monkey3.collected monkey3.friday.txt
 
 Note that the % prefix is used to pass dash-containig arguments down
 to the command. Now the cool/weird thing is that you can use another rule to add more
@@ -170,7 +170,7 @@ class SubstitutedWord(Word):
         """Initialize from a matched word and a substitution"""
         self.word = copyfrom.pattern.format(*(rematch.groups()))
         super(SubstitutedWord,self).__init__(**(copyfrom.__dict__))
-                
+
 class Command(_AttributeHolder):
     def __init__(self, words=None):
         if words is not None:
@@ -201,10 +201,10 @@ def getList(listfile):
             return [i.strip() for i in f.readlines()]
     else:
         return []
-        
+
 class MatchedCommand(Command):
     def products(self):
-        listed = [i 
+        listed = [i
                   for word in self.words
                   if word.output and word.listing
                   for i in getList(word.word)]
@@ -229,7 +229,7 @@ class MatchedCommand(Command):
                     wordsSeen[word.word] = word
         self.words = words
 
-        
+
     def makeRule(self):
         return (
             "{products}: {dependencies}\n"
@@ -258,7 +258,6 @@ class MatchedCommand(Command):
                     .format(" ".join(x.word for x in self.words if x.listing)))
         else:
             return ""
-        
 
     def mkdirCommands(self):
         targets = [word.word for word in self.words if word.mkdir]
@@ -306,7 +305,7 @@ def generateRules(files, commands, maxdepth, maxfiles, verbose=False):
 
     ##track the commands used to generate each target.
     commandsDict = dict([(x, None) for x in files])
-    
+
     ##track the depth of generation for both targets and dependencies of rules.
     depthDict = dict([(x, 0) for x in files])
 
@@ -334,7 +333,7 @@ def generateRules(files, commands, maxdepth, maxfiles, verbose=False):
                                              for c in previousCommands
                                              for i in c.products()])
                 [commandsDict.pop(i) for i in unique(targetsWereCovered, lambda a:a)]
-                
+
                 if len(previousCommands) > 0:
                     mergedCommand = previousCommands[0]
                     mergedCommand.merge(*(previousCommands[1:] + [matchedCommand]))
@@ -407,7 +406,7 @@ def makeparser():
             else:
                 namespace.commands = [Command()]
             super(StartCommand, self).__call__(parser, namespace, values, option_string)
-            
+
     class SetFlag(AddWords):
         def __call__(self, parser, namespace, values, option_string):
             flagname = option_string.replace("--", "")
@@ -415,7 +414,7 @@ def makeparser():
                 setattr(theWord[0], flagname, True)
             super(SetFlag, self).__call__(parser, namespace, values, option_string)
 
-    
+
     parser = ShlexArgParser(description=longhelp, fromfile_prefix_chars="@")
 
     parser.add_argument("--command",
@@ -425,10 +424,10 @@ def makeparser():
                         help="Make a chatty printout to stderr about every "
                         "file that is matched.")
     parser.add_argument('--match', action=SetFlag, nargs='*', dest="",
-                        help="The next word specifies a regexp pattern to match "
-                        "against available files. (Without --match, it is a regexp "
-                        "replacement pattern. Exactly one word in a command must "
-                        "be a match)",)
+                        help="The next word specifies a regexp pattern to "
+                        "match against available files. (Without --match, it "
+                        "is a regexp replacement pattern. Exactly one word in "
+                        "a command must be a match)",)
     parser.add_argument('--input', action=SetFlag, nargs='*', dest="",
                         help="The next word specifies an input file.")
     parser.add_argument('--output', action=SetFlag, nargs='*', dest="",
@@ -445,13 +444,20 @@ def makeparser():
                         help="The next word specifies a phony target which "
                         "will depend on the outputs of this command.")
     parser.add_argument('--mkdir', action=SetFlag, nargs='*', dest="",
-                        help="An enclosing directory will be made (using mkdir -p) "
-                        "if one does not already exist.")
+                        help="An enclosing directory will be made "
+                        "(using mkdir -p) if one does not already exist.")
     parser.add_argument('--intermediate',
                         help="The next word specifies an intermediate target",
                         action=SetFlag, nargs='*', dest="")
     parser.add_argument('--invisible', action=SetFlag, nargs='*', dest="",
                         help="This word will not be copied to the command line.")
+    parser.add_argument('--tagfile', action=SetFlag, nargs='*', dest="",
+                        help="When applied to any output of a rule, an "
+                        "intermediate file will be used as the target and "
+                        "touched at the end of the rule. Furthermore, any steps "
+                        "depending on this step will instead depend on the "
+                        "intermediate. This is done by default for any rules "
+                        "with multiple outputs.")
 
     parser.add_argument('--maxdepth', nargs=1, default=100, type=int,
                         help="The maximum depth of file "
@@ -459,7 +465,8 @@ def makeparser():
     parser.add_argument('--maxfiles', nargs=1, default=10000, type=int,
                         help="The maximum number of targets "
                         "to consider. (default 10000)")
-    
+    parser.add_argument('--tagdir', nargs=1, default="tags",
+                        help="the directory tag files are stored in.")
     parser.add_argument('--files', nargs='*',
                         help="The base set of files that are to be processed.")
     return parser
@@ -467,8 +474,8 @@ def makeparser():
 def test():
     """This exercises the various features of the makefile generator. I know I
     should break down the functionality into multiple unit tests,
-    but not sure how to test other than by inspection."""
-    
+    but not sure how to test other than by inspection. of the output file."""
+
     with open("input.list", 'w') as f:
         print("datafiles/foo.txt", "datafiles/bar.txt", "datafiles/baz.txt",
               file=f, sep="\n")
@@ -476,46 +483,54 @@ def test():
     with open("output.list", 'w') as f:
         print("sqlfiles/wibble.sql", "sqlfiles/wobble.sql", "sqlfiles/wubble.sql",
               file=f, sep="\n")
-    
-    testargs = ('--command '
-                '--once --input ./aggregate.R '
-                '--once --output --mkdir pools/{0}.collected '
-                '--match --input datafiles/([^.]*)\.(.*).txt '
-                '--invisible --phony --once aggregates '
-                
-                '--command '
-                '--match --output --once pools/monkey2.collected '
-                '--invisible --input ./compensate.for.monkey2.R '
-                '%--option=./compensate.for.monkey2.R '
 
-                '--command --input ./tosql '
-                '--match --input datafiles/(.*)\.txt '
-                '--output --intermediate sqlfiles/{0}.sql '
-                
-                '--command --input ./dbshove.R '
-                'database.db '
-                '--match --input sqlfiles/(.*)\.sql '
-                '&& touch --output dbtickets/{0}.put '
-                '--phony --invisible dbupdated '
+    testargs = """
+    --command
+    --once --input ./aggregate.R
+    --once --output --mkdir pools/{0}.collected
+    --match --input datafiles/([^.]*)\.(.*).txt
+    --invisible --phony --once aggregates
 
-                '--command '
-                '--output --invisible database.db '
-                '--input --invisible --match dbupdated '
+    --command
+    --match --output --once pools/monkey2.collected
+    --invisible --input ./compensate.for.monkey2.R
+    %--option=./compensate.for.monkey2.R
 
-                '--command --once corge '
-                '--output --once --listing output.list '
-                '--input --match dbtickets/(.*).put '
+    --command --input ./tosql
+    --match --input datafiles/(.*)\.txt
+    --output --intermediate sqlfiles/{0}.sql
 
-                '--command check --output {0}.check --input --match --listing (.*).list '
-                
-                '--command '
-                '--phony --output --invisible --once buildAll '
-                '--input --invisible --match .* '
-                
-                '--files datafiles/monkey1.monday.txt datafiles/monkey1.tuesday.txt '
-                'datafiles/monkey2.wednesday.txt datafiles/monkey2.thursday.txt '
-                'datafiles/monkey3.friday.txt input.list'
-                )
+    --command --input ./dbshove.R database.db
+    --match --input sqlfiles/(.*)\.sql
+    && touch --output dbtickets/{0}.out
+    --phony --invisible dbupdated
+
+    --command doTheThing --input --pools/(.*)\.collected
+    --output --mkdir graphs/{0}.graph1.out
+    --output --mkdir graphs/{0}.graph2.out
+
+    --command --once --input --match graphs/(.*).graph
+    --output --once graphs/grouped.graph
+
+    --command
+    --output --invisible database.db
+    --input --invisible --match dbupdated
+
+    --command --once corge
+    --output --once --listing output.list
+    --input --match dbtickets/(.*).put
+
+    --command check
+    --output {0}.check
+    --input --match --listing (.*).list
+
+    --command
+    --phony --output --invisible --once buildAll
+    --input --invisible --match .*
+    --files datafiles/monkey1.monday.txt datafiles/monkey1.tuesday.txt
+    datafiles/monkey2.wednesday.txt datafiles/monkey2.thursday.txt
+    datafiles/monkey3.friday.txt input.list
+    """
     goFromString(testargs)
 
 def testDepth():
@@ -534,7 +549,7 @@ def testBreadth():
                 '--output {0}.b '
                 '--files test.a')
     goFromString(testargs)
-    
+
 
 def goFromString(str):
     parser = makeparser()
@@ -553,13 +568,13 @@ if __name__ == "__main__":
 
 
 ##TODO
-    
+
     ##1. Think about reworking to have multimatching rules as follows:
-    ##(zero match args; just make a command.  Two match args, make a
+    ##(zero match args; just make a command.)  Two match args, make a
     ##partal match at one argument which is another (self-removing)
     ##rule; and finish at another. Will have to do something clever
     ##with the formatting strings.
-    
+
     ##2. Intelligent escaping of command words that must go back
     ##through Make and shell script (that can be bypassed if you want
     ##to use a Make special variable...)
