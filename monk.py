@@ -116,7 +116,7 @@ class Word(_AttributeHolder):
     def __init__(self, pattern = "", pattern__ = None, match = False,
                  input = False, output = False, listing = False, once = False,
                  phony = False, intermediate = False, invisible = False,
-                 mkdir = False, tagfile = False):
+                 mkdir = False, tagged = False):
         self.pattern      = pattern
         self.pattern__    = pattern__
         self.match        = match
@@ -128,7 +128,7 @@ class Word(_AttributeHolder):
         self.mkdir        = mkdir
         self.intermediate = intermediate
         self.invisible    = invisible
-        self.tagfile      = tagfile
+        self.tagged      = tagged
 
 class UnmatchedWord(Word):
     def tryMatch(self, filename):
@@ -207,9 +207,10 @@ def getList(listfile):
 class MatchedCommand(Command):
     def setTagged(self):
         outputs = [word for word in self.words if word.output]
-        if len(outputs) > 1:
+        listings = [word for word in outputs if word.listing]
+        if len(outputs) > 1 or len(listings) > 0:
             for output in outputs:
-                output.tagfile = True
+                output.tagged = True
 
     def products(self):
         listed = [i
@@ -247,7 +248,7 @@ class MatchedCommand(Command):
         self.words = words
 
     def isTagged(self):
-        return any([word.tagfile for word in self.words if word.output])
+        return any([word.tagged for word in self.words if word.output])
 
     def touchTag(self, tagdir):
         if self.isTagged():
@@ -266,7 +267,7 @@ class MatchedCommand(Command):
             "{phony_rule}"
             "{intermediate_rule}"
             "{listing_rule}"
-            "{tagfile_rule}"
+            "{tagged_rule}"
             ).format(**
                 { 'products'          : (
                          " ".join(set(self.taggedProducts(tagdir))))
@@ -281,10 +282,10 @@ class MatchedCommand(Command):
                 , 'intermediate_rule' : self.intermediateRule()
                 , 'mkdir_if_necessary': self.mkdirCommands(tagdir)
                 , 'listing_rule'      : self.listingRule()
-                , 'tagfile_rule'      : self.tagfileRule(tagdir)
+                , 'tagged_rule'      : self.taggedRule(tagdir)
                 })
 
-    def tagfileRule(self, tagdir):
+    def taggedRule(self, tagdir):
         if self.isTagged():
             untagged = self.products()
             tagged = self.taggedProducts(tagdir)
@@ -502,13 +503,13 @@ def makeparser():
                         action=SetFlag, nargs='*', dest="")
     parser.add_argument('--invisible', action=SetFlag, nargs='*', dest="",
                         help="This word will not be copied to the command line.")
-    parser.add_argument('--tagfile', action=SetFlag, nargs='*', dest="",
+    parser.add_argument('--tagged', action=SetFlag, nargs='*', dest="",
                         help="When applied to any output of a rule, an "
                         "intermediate file will be used as the target and "
                         "touched at the end of the rule. Furthermore, any steps "
                         "depending on this step will instead depend on the "
                         "intermediate. This is done by default for any rules "
-                        "with multiple outputs.")
+                        "with multiple outputs (including listing files.)")
 
     parser.add_argument('--maxdepth', nargs=1, default=100, type=int,
                         help="The maximum depth of file "
@@ -569,7 +570,7 @@ def test():
 
     --command --once corge
     --output --once --listing output.list
-    --input --match dbtickets/(.*).put
+    --input --match dbtickets/(.*).out
 
     --command check
     --output {0}.check
