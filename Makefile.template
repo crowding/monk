@@ -1,0 +1,15 @@
+# template Makefile for usage of Monk.
+
+FILES := $(filter-out $(MAKEFILE_LIST),$(shell git ls-tree --name-only HEAD .))
+
+monk.makefile: monk/monk.py Monkfile
+	./monk/monk.py @Monkfile --files $(FILES) > $@ || rm $@
+
+include monk.makefile
+
+$(MAKEFILE_LIST): monk.makefile
+
+clean:
+	git clean -dfx
+
+all: $(MAKEFILE_LIST)
