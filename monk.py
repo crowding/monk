@@ -445,6 +445,7 @@ class ShlexArgParser(argparse.ArgumentParser):
 def makeparser():
     """The command line argument parser."""
     theWord = [UnmatchedWord()]
+    directoryPrefix = [];
 
     class AddWords(argparse.Action):
         def __call__(self, parser, namespace, values, option_string):
@@ -454,6 +455,10 @@ def makeparser():
                 self.addWord(namespace, w)
 
         def addWord(self, namespace, word):
+            #if it's flagged as input or output, push any diurectory
+            #prefixes on.
+            if theWord[0].input or theWord[0].output:
+                word = os.path.join(*(directoryPrefix + [word]))
             theWord[0].pattern = word
             namespace.commands[-1].words.extend(theWord)
             theWord[0] = UnmatchedWord()
@@ -473,6 +478,14 @@ def makeparser():
             if getattr(theWord[0], flagname) is not None:
                 setattr(theWord[0], flagname, True)
             super(SetFlag, self).__call__(parser, namespace, values, option_string)
+
+    class PushDir(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string):
+            directoryPrefix.extend(values)
+
+    class PopDir(argparse.Action):
+        def __call__(self, parser, namespace, values, option_string):
+            directoryPrefix.pop()
 
 
     parser = ShlexArgParser(description=longhelp, fromfile_prefix_chars="@")
@@ -529,6 +542,12 @@ def makeparser():
                         help="the directory tag files are stored in.")
     parser.add_argument('--files', nargs='*',
                         help="The base set of files that are to be processed.")
+    parser.add_argument('--pushdir', nargs=1,
+                        help="Add a directory prefix for inputs and outputs."
+                        "Useful when including a Monkfile from a subproject.",
+                        action=PushDir)
+    parser.add_argument('--popdir', help="Undo the most recent pushdir.",
+                        nargs=0, action=PopDir)
     return parser
 
 def test():
@@ -573,8 +592,10 @@ def test():
     --output --mkdir graphs/{0}.graph1.out
     --output --mkdir graphs/{0}.graph2.out
 
-    --command --once --input --match graphs/(.*).graph
-    --output --once graphs/grouped.graph
+    --pushdir graphs
+    --command --once --input --match (.*).graph
+    --output --once grouped.graph
+    --popdir
 
     --command --once corge
     --output --once --listing output.list
