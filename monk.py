@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from __future__ import print_function
-import re, os, argparse, string, glob, copy, shlex
+import re, os, sys, argparse, string, glob, copy, shlex
 
 longhelp = """
 makemake [--command [FLAG COMMAND_WORD]* ]* --files [FILENAME]*
@@ -176,9 +176,10 @@ class SubstitutedWord(Word):
 class Command(_AttributeHolder):
     def __init__(self, words=None):
         if words is not None:
-            self.words = list(words);
+            self.words = list(words)
         else:
-            self.words = [];
+            self.words = []
+        self.matchCount = 0
 
     def tryMatch(self,filename):
         #check for exactly one matcher
@@ -192,6 +193,7 @@ class Command(_AttributeHolder):
         theMatch = theMatch[0]
         matchedWords = [match if match is not None else word.subst(theMatch)
                         for (match, word) in zip(matches, self.words)]
+        self.matchCount = self.matchCount + 1
         return MatchedCommand(words=matchedWords)
 
     def description(self):
@@ -370,9 +372,9 @@ def generateRules(files, commands, maxdepth, maxfiles, verbose=False, **kwargs):
             matchedCommand = commandPattern.tryMatch(consideredTarget)
             if matchedCommand is not None:
                 if verbose:
-                    print('-'*3)
-                    print("matched: {0}".format(consideredTarget))
-                    print("with command: {0}".format(matchedCommand.description()))
+                    print('-'*3, file=sys.stderr)
+                    print("matched: {0}".format(consideredTarget), file=sys.stderr)
+                    print("with command: {0}".format(matchedCommand.description()), file=sys.stderr)
                 #See what files are produced by this command.
                 #Add them to the products list for perusal.
                 products = matchedCommand.products()
@@ -391,7 +393,7 @@ def generateRules(files, commands, maxdepth, maxfiles, verbose=False, **kwargs):
                     mergedCommand = previousCommands[0]
                     mergedCommand.merge(*(previousCommands[1:] + [matchedCommand]))
                     if verbose:
-                        print("merged into command: {0}".format(mergedCommand.commandLine()))
+                        print("merged into command: {0}".format(mergedCommand.commandLine()), file=sys.stderr)
                 else:
                     mergedCommand = matchedCommand
 
@@ -400,7 +402,7 @@ def generateRules(files, commands, maxdepth, maxfiles, verbose=False, **kwargs):
                 prevDepth = depthDict[consideredTarget]
 
                 if prevDepth >= maxdepth:
-                    raise Exception("target generation went too deep at {}"
+                    raise Exception("target generation went too deep at {0}"
                                     .format(consideredTarget))
 
                 for i in newProducts:
@@ -409,23 +411,29 @@ def generateRules(files, commands, maxdepth, maxfiles, verbose=False, **kwargs):
                 newFiles = [p for p in newProducts + newDependencies
                             if not depthDict.has_key(p)]
                 if verbose:
-                    print("new files (depth {0}): {1}".format(prevDepth+1, " ".join(newFiles)))
+                    print("new files (depth {0}): {1}".format(prevDepth+1, " ".join(newFiles)), file=sys.stderr)
                 files.extend(newFiles)
 
                 if len(files) >= maxfiles:
-                    raise Exception("too many files generated at {}"
+                    raise Exception("too many files generated at {0}"
                                     .format(consideredTarget))
 
                 for i in newProducts + newDependencies:
                     depthDict[i] = prevDepth+1
 
-                # [print(i.makeRule()) for i in
+                # [print(i.makeRule(), file=sys.stderr) for i in
                 #  unique([commandsDict[i] for i in files
                 #          if commandsDict.has_key(i)
                 #          and commandsDict[i] is not None])]
-                # print('-'*80)
+                # print('-'*80, file=sys.stderr)
 
-    ##return commands uniquely in order of creation.
+    unmatchedCommands = [c for c in commands if c.matchCount == 0]
+    for c in unmatchedCommands:
+        print("warning: unmatched command: {0}\n"
+              .format(c.description()),
+              file=sys.stderr)
+
+    # commands uniquely in order of creation.
     return unique([commandsDict[i] for i in files
                    if commandsDict.has_key(i)
                    and commandsDict[i] is not None])
@@ -526,7 +534,7 @@ def makeparser():
 def test():
     """This exercises the various features of the makefile generator. I know I
     should break down the functionality into multiple unit tests,
-    but not sure how to test other than by inspection. of the output file."""
+    but not sure how to test other than by inspection of the output file."""
 
     with open("input.list", 'w') as f:
         print("datafiles/foo.txt", "datafiles/bar.txt", "datafiles/baz.txt",
@@ -557,16 +565,16 @@ def test():
     && touch --output dbtickets/{0}.out
     --phony --invisible dbupdated
 
+    --command
+    --output --invisible --tagged database.db
+    --input --invisible --match dbtickets/.*.out
+
     --command doTheThing --input --match pools/(.*)\\\\.collected
     --output --mkdir graphs/{0}.graph1.out
     --output --mkdir graphs/{0}.graph2.out
 
     --command --once --input --match graphs/(.*).graph
     --output --once graphs/grouped.graph
-
-    --command
-    --output --invisible database.db
-    --input --invisible --match dbupdated
 
     --command --once corge
     --output --once --listing output.list
@@ -578,7 +586,8 @@ def test():
 
     --command
     --phony --output --invisible --once buildAll
-    --input --invisible --match .*
+    --input --invisible --match '.*'
+
     --files datafiles/monkey1.monday.txt datafiles/monkey1.tuesday.txt
     datafiles/monkey2.wednesday.txt datafiles/monkey2.thursday.txt
     datafiles/monkey3.friday.txt input.list
