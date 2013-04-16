@@ -302,7 +302,7 @@ class MatchedCommand(Command):
         if [w for w in self.words if w.listing]:
             #changes in output list files should trigger a reboot.
             #as should changes in input list file.
-            return ("$(CURDIR)/$(lastword $(MAKEFILE_LIST)): {0}\n\n"
+            return ("$(lastword $(MAKEFILE_LIST)): {0}\n\n"
                     .format(" ".join(x.word for x in self.words if x.listing)))
         else:
             return ""
