@@ -116,7 +116,7 @@ class Word(_AttributeHolder):
     def __init__(self, pattern = "", pattern__ = None, match = False,
                  input = False, output = False, listing = False, once = False,
                  phony = False, intermediate = False, invisible = False,
-                 mkdir = False, tagged = False):
+                 mkdir = False, tagged = False, directoryPrefix = []):
         self.pattern      = pattern
         self.pattern__    = pattern__
         self.match        = match
@@ -129,13 +129,14 @@ class Word(_AttributeHolder):
         self.intermediate = intermediate
         self.invisible    = invisible
         self.tagged      = tagged
+        self.directoryPrefix = directoryPrefix
 
 class UnmatchedWord(Word):
     def tryMatch(self, filename):
         """return a matched word, or None"""
         if self.match:
             if self.pattern__ is None:
-                self.pattern__ = re.compile(self.pattern)
+                self.pattern__ = re.compile(os.path.join(*(self.directoryPrefix + [self.pattern])))
             match = re.match(self.pattern__, filename)
             if match:
                 return MatchedWord(self, rematch=match)
@@ -166,6 +167,15 @@ class MatchedWord(Word):
             pass
         super(MatchedWord, self).__setattr__(attr, value)
 
+    def format(self, directoryPrefix = None):
+        if (self.input or self.output):
+            return os.path.join(*(
+                (self.directoryPrefix if directoryPrefix is None
+                 else directoryPrefix)
+                + [self.word]))
+        else:
+            return self.word
+
 
 class SubstitutedWord(Word):
     def __init__(self, copyfrom, rematch):
@@ -173,13 +183,23 @@ class SubstitutedWord(Word):
         self.word = copyfrom.pattern.format(*(rematch.groups()))
         super(SubstitutedWord,self).__init__(**(copyfrom.__dict__))
 
+    def format(self, directoryPrefix = None):
+        if (self.input or self.output):
+            return os.path.join(*(
+                (self.directoryPrefix if directoryPrefix is None
+                 else directoryPrefix)
+                + [self.word]))
+        else:
+            return self.word
+
 class Command(_AttributeHolder):
-    def __init__(self, words=None):
+    def __init__(self, words=None, directoryPrefix=[]):
         if words is not None:
             self.words = list(words)
         else:
             self.words = []
         self.matchCount = 0
+        self.directoryPrefix = directoryPrefix
 
     def tryMatch(self,filename):
         #check for exactly one matcher
@@ -218,14 +238,15 @@ class MatchedCommand(Command):
         listed = [i
                   for word in self.words
                   if word.output and word.listing
-                  for i in getList(word.word)]
-        return listed + [word.word for word in self.words if word.output]
+                  for i in getList(word.format())]
+        return listed + [word.format() for word in self.words if word.output]
 
     def taggedProducts(self, tagdir):
         if self.isTagged():
             #replicating the the first output will suffice.
             firstOutput = [word for word in self.words if word.output][0]
-            return [os.path.join(tagdir, firstOutput.word)]
+            return [firstOutput.format(
+                directoryPrefix = firstOutput.directoryPrefix + [tagdir])]
         else:
             return self.products()
 
@@ -233,8 +254,8 @@ class MatchedCommand(Command):
         listed = [i
                   for word in self.words
                   if word.input and word.listing
-                  for i in getList(word.word)]
-        return listed + [word.word for word in self.words if word.input]
+                  for i in getList(word.format())]
+        return listed + [word.format() for word in self.words if word.input]
 
     def merge(self, *others):
         ##add the words in order. If "once" is used, the first word
@@ -243,10 +264,10 @@ class MatchedCommand(Command):
         wordsSeen = {}
         words = []
         for word in sum([x.words for x in [self] + list(others)], []):
-            if not (wordsSeen.has_key(word.word) and wordsSeen[word.word].once):
+            if not (wordsSeen.has_key(word.format()) and wordsSeen[word.format()].once):
                 words.append(word)
-                if not wordsSeen.has_key(word.word):
-                    wordsSeen[word.word] = word
+                if not wordsSeen.has_key(word.format()):
+                    wordsSeen[word.format()] = word
         self.words = words
 
     def isTagged(self):
@@ -264,6 +285,7 @@ class MatchedCommand(Command):
         return (
             "{products}: {dependencies}\n"
             "{mkdir_if_necessary}"
+            "{cd_if_necessary}"
             "{command_indent}{command}{touch_tag}\n"
             "\n"
             "{phony_rule}"
@@ -283,8 +305,9 @@ class MatchedCommand(Command):
                 , 'phony_rule'        : self.phonyRule()
                 , 'intermediate_rule' : self.intermediateRule()
                 , 'mkdir_if_necessary': self.mkdirCommands(tagdir)
+                , 'cd_if_necessary'   : self.changeDirCommand()
                 , 'listing_rule'      : self.listingRule()
-                , 'tagged_rule'      : self.taggedRule(tagdir)
+                , 'tagged_rule'       : self.taggedRule(tagdir)
                 })
 
     def taggedRule(self, tagdir):
@@ -303,12 +326,12 @@ class MatchedCommand(Command):
             #changes in output list files should trigger a reboot.
             #as should changes in input list file.
             return ("$(lastword $(MAKEFILE_LIST)): {0}\n\n"
-                    .format(" ".join(x.word for x in self.words if x.listing)))
+                    .format(" ".join(x.format() for x in self.words if x.listing)))
         else:
             return ""
 
     def mkdirCommands(self, tagdir):
-        targets = [word.word for word in self.words if word.mkdir]
+        targets = [word.format() for word in self.words if word.mkdir]
         if (self.isTagged()):
             targets.extend(self.taggedProducts(tagdir))
         dirs = [os.path.split(x)[0] for x in targets]
@@ -321,19 +344,25 @@ class MatchedCommand(Command):
         else:
             return ""
 
+    def changeDirCommand(self):
+        if len(self.directoryPrefix) > 0:
+            return("\t{0}".format(os.path.join(self.directoryPrefix)))
+        else:
+            return ""
+
     def phonyRule(self):
         phonyWords = [x for x in self.words if x.phony]
 
         if phonyWords:
-            phonyRule = "\n\n".join(["{0}: {1}".format(x.word, " ".join(self.products()))
+            phonyRule = "\n\n".join(["{0}: {1}".format(x.format(), " ".join(self.products()))
                                         for x in phonyWords if not (x.output or x.input)])
-            phonyDecl = "\n\n.PHONY: {0}\n\n".format(" ".join([x.word for x in phonyWords]))
+            phonyDecl = "\n\n.PHONY: {0}\n\n".format(" ".join([x.format() for x in phonyWords]))
             return phonyRule + phonyDecl
         else:
             return ""
 
     def intermediateRule(self):
-        intermediateTargets = [x.word for x in self.words if x.intermediate]
+        intermediateTargets = [x.format() for x in self.words if x.intermediate]
 
         if intermediateTargets:
             return ".INTERMEDIATE: {0}\n\n".format(" ".join(intermediateTargets))
@@ -341,7 +370,8 @@ class MatchedCommand(Command):
             return ""
 
     def commandLine(self):
-        return " ".join([i.word for   i  in self.words if not i.invisible])
+        #do not use word.format() since you will be chdir() into the word.
+        return " ".join([i.word for i in self.words if not i.invisible])
 
 def unique(seq, idfun=id):
     # order preserving prune of a list by object identity
@@ -455,11 +485,8 @@ def makeparser():
                 self.addWord(namespace, w)
 
         def addWord(self, namespace, word):
-            #if it's flagged as input or output, push any diurectory
-            #prefixes on.
-            if theWord[0].input or theWord[0].output:
-                word = os.path.join(*(directoryPrefix + [word]))
             theWord[0].pattern = word
+            theWord[0].directoryPrefix = list(directoryPrefix)
             namespace.commands[-1].words.extend(theWord)
             theWord[0] = UnmatchedWord()
 
@@ -467,9 +494,9 @@ def makeparser():
         def __call__(self, parser, namespace, values, option_string):
             x = getattr(namespace, "commands", None)
             if x:
-                x.append(Command())
+                x.append(Command(directoryPrefix = list(directoryPrefix)))
             else:
-                namespace.commands = [Command()]
+                namespace.commands = [Command(directoryPrefix = list(directoryPrefix))]
             super(StartCommand, self).__call__(parser, namespace, values, option_string)
 
     class SetFlag(AddWords):
@@ -543,7 +570,7 @@ def makeparser():
     parser.add_argument('--files', nargs='*',
                         help="The base set of files that are to be processed.")
     parser.add_argument('--pushdir', nargs=1,
-                        help="Add a directory prefix for inputs and outputs."
+                        help="Add directory prefix for inputs and outputs."
                         "Useful when including a Monkfile from a subproject.",
                         action=PushDir)
     parser.add_argument('--popdir', help="Undo the most recent pushdir.",
@@ -582,7 +609,7 @@ def test():
     --command --input ./dbshove.R database.db
     --match --input sqlfiles/(.*)\\\\.sql
     && touch --output dbtickets/{0}.out
-    --phony --invisible dbupdated
+     --phony --invisible dbupdated
 
     --command
     --output --invisible --tagged database.db
@@ -669,5 +696,6 @@ if __name__ == "__main__":
     ##4. Maybe more warnings/errors for nonsensical flags or
     ##   combinations of flags.
 
-    ##5. Go ahead and escape all command line components when writing
+    ##5. Go ahead and escape all command line onents when writing
     ##   the Makefile.
+ 
