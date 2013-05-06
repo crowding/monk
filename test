@@ -1,5 +1,0 @@
-#!/usr/bin/env python
-import monk
-
-if (__name__ == "__main__"):
-    monk.test()
