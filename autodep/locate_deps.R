@@ -18,24 +18,28 @@ findlibs.expression <- function(expr, pkgConn=stdout(), srcConn=stdout()) {
 }
 
 findlibs.call <- function(call, pkgConn=stdout(), srcConn=stdout(), ...) {
-  if (any(call[[1]] == c("library", "require"))) {
-    args <- match.call(getFunction(as.character(call[[1]])), call)
-    if (!is.null(args$package) && (is.character(args$package) || is.name(args$package))) {
-      writeLines(as.character(args$package), pkgConn)
-    }
-  } else if (any(call[[1]] == c("source", "load"))) {
-    args <- match.call(getFunction(as.character(call[[1]])), call)
-    #it's a sourcing...
-    if (!is.null(args$file) && (is.character(args$file))) {
-      #it's a source file.
-      if (theDir != "") {
-        writeLines(as.character(file.path(theDir, args$file)), srcConn)
-      } else {
-        writeLines(as.character(args$file), srcConn)
-      }
-    }
+  if (is.recursive(call[[1]])) {
+    lapply(call, findlibs)
   } else {
-    findlibs(as.list(call), pkgConn, srcConn)
+    if (any(as.character(call[[1]]) %in% c("library", "require"))) {
+      args <- match.call(getFunction(as.character(call[[1]])), call)
+      if (!is.null(args$package) && (is.character(args$package) || is.name(args$package))) {
+        writeLines(as.character(args$package), pkgConn)
+      }
+    } else if (any(call[[1]] == c("source", "load"))) {
+      args <- match.call(getFunction(as.character(call[[1]])), call)
+      #it's a sourcing...
+      if (!is.null(args$file) && (is.character(args$file))) {
+        #it's a source file.
+        if (theDir != "") {
+          writeLines(as.character(file.path(theDir, args$file)), srcConn)
+        } else {
+          writeLines(as.character(args$file), srcConn)
+        }
+      }
+    } else {
+      findlibs(as.list(call), pkgConn, srcConn)
+    }
   }
 }
 
