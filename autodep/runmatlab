@@ -1,0 +1,32 @@
+#!/bin/bash
+#Launch matlab and run a single command, returning an exit code of 1 if there's an error.
+#
+#For example, if you had a matlab command:
+#mungeData('infile.mat', 'outfile.mat')
+#
+#then with this script you can do
+#./runmatlab mungeData('infile.mat', 'outfile.mat')
+#
+#from the shell, or a makefile.
+#
+#Peter Meilstrup
+
+status=`mktemp -t matlab.status`
+#escape single quotes
+args=${@//\'/\'\'}
+
+matlab -nodesktop -nosplash <<EOF
+try
+    feature('HotLinks', 'off');
+    cd('$(pwd)');
+    eval('${args}');
+catch e
+    system('echo 1 > $status');
+    fprintf(2,'%s',evalc('getReport(e)'));
+    exit();
+end
+system('echo 0 > $status');
+exit();
+EOF
+
+exit `cat $status`
