@@ -12,14 +12,42 @@
 #Peter Meilstrup
 
 status=`mktemp -t matlab.status`
+
+function abspath() {
+    pushd . > /dev/null;
+    if [ -d "$1" ]; then
+        cd "$1"; dirs -l +0;
+    else
+        cd "`dirname \"$1\"`";
+        cur_dir=`dirs -l +0`;
+        if [ "$cur_dir" == "/" ]; then
+            echo "$cur_dir`basename \"$1\"`";
+        else
+            echo "$cur_dir/`basename \"$1\"`";
+        fi;
+    fi;
+    popd > /dev/null;
+}
+
 #escape single quotes
+runmatlab_path=$(dirname $(abspath "${BASH_SOURCE[0]}" ) )
+script_path=$(dirname $(abspath $1))
+script_name=${1%.*}
+
+#support naming a script as a .m file for dubious convenience
+shift
+
 args=${@//\'/\'\'}
+pathcmd_1="addpath('${runmatlab_path//\'/\'\'}');"
+pathcmd_2="addpath('${script_path//\'/\'\'}');"
 
 matlab -nodesktop -nosplash <<EOF
 try
     feature('HotLinks', 'off');
+    ${pathcmd_1}
+    ${pathcmd_2}
     cd('$(pwd)');
-    eval('${args}');
+    eval('${script_name} ${args}');
 catch e
     system('echo 1 > $status');
     fprintf(2,'%s',evalc('getReport(e)'));

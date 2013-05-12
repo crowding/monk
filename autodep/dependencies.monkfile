@@ -7,13 +7,13 @@
 --invisible --phony --once dependencies
 
 #this computes dependencies for R files
---command Rscript locate_deps.R {0}
+--command Rscript monk/autodep/locate_deps.R {0}
 --output --mkdir         dependencies/{0}.pkg
 --output --mkdir --match --tagged 'dependencies/(.*\.[rR]).dep'
 --invisible --phony dependencies
 
 ##and here's how to dependencies for matlab files.
---command ./runmatlab dependencies {0}
+--command ./monk/autodep/runmatlab dependencies {0}
 --output --mkdir --match --tagged 'dependencies/(.*\.m).dep'
 --invisible --phony dependencies
 
