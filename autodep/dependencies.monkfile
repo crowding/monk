@@ -1,15 +1,12 @@
 #Each R file depends on its dependencies and on having the right packages installed.
-#TODO make it so that changes to "listing" files cause the makefile to be rebuilt?
-#need to think more about this case of dependency discovery.
 
---command
---input --invisible --once --listing 'dependencies/{0}.dep'
---output --match --invisible --once  '(.*\.[Rr])$'
---invisible --phony                  dependencies
+#Matlab and R scripts will need to have correcponding dependency files
+#fdep is overzealous though, need to limit to what's in the project?
+--command --output --invisible --tagged --match '([^/]*\.[mrR])$'
+--input --invisible --listing --tagged 'dependencies/{0}.dep'
+--invisible --phony --once dependencies
 
-##here's how to compute dependencies for R script files
-##TODO this ought to be re-computed when the script file changes???
-##How to do that without circularity??
+#this computes dependencies for R files
 --command Rscript locate_deps.R {0}
 --output --mkdir         dependencies/{0}.pkg
 --output --mkdir --match --tagged 'dependencies/(.*\.[rR]).dep'
@@ -20,18 +17,13 @@
 --output --mkdir --match --tagged 'dependencies/(.*\.m).dep'
 --invisible --phony dependencies
 
-#compute dependencies for Matlab and R scripts, via tag files
---command --output --invisible --tagged --match '([^/]*\.[mrR])$'
---input --invisible --listing --tagged 'dependencies/{0}.dep'
---invisible --phony --once dependencies
-
-#compute needed packages for R files, via tags
+#remember when we have installed the packages for a script
 --command --output --invisible --tagged --match '([^/]*\.[rR])$'
 --input --invisible 'Rlibs/dependencies/{0}.pkginstall'
 --invisible --phony --once dependencies
 
-##And here's how to install requisite packages.
---command Rscript install_packages.R
-Rlibs --input --match 'dependencies/(.*)\.pkg$'
+##And here's how to install the packages
+--command Rscript install_packages.R Rlibs
+--input --match 'dependencies/(.*)\.pkg$'
 --output --invisible --mkdir --tagged Rlibs/dependencies/{0}.pkginstall
 --invisible --phony --once dependencies
