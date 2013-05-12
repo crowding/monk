@@ -23,7 +23,7 @@
 --invisible --phony --once dependencies
 
 ##And here's how to install the packages
---command Rscript install_packages.R Rlibs
+--command Rscript monk/autodep/install_packages.R Rlibs
 --input --match 'dependencies/(.*)\.pkg$'
 --output --invisible --mkdir --tagged Rlibs/dependencies/{0}.pkginstall
 --invisible --phony --once dependencies
