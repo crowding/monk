@@ -2,8 +2,11 @@
 from __future__ import print_function
 import sys, monk, unittest, time, datetime, os, subprocess, contextlib, StringIO
 
+
+#first we have a bunch of context managers to create and tear down test scaffolding
+
 @contextlib.contextmanager
-def capture():
+def captureOutput():
     oldout, olderr = sys.stdout, sys.stderr
     out = (StringIO.StringIO(), StringIO.StringIO())
     sys.stdout, sys.stderr = out
@@ -13,48 +16,65 @@ def capture():
     out[1].close()
 
 @contextlib.contextmanager
-def directory(dir):
-    old_dir = os.getcwd()
-    try:
-        os.chdir(dir)
-    except OSError:
-        os.mkdir(dir)
-        os.chdir(dir)
-    yield
-    os.chdir(old_dir)
+def openTempFile(name, mode='w', *args, **kwargs):
+    (dir, base) = os.path.split(foo)
+    with tempDir(dir):
+        with file(name, mode, *args, **kwargs) as f:
+            yield f
+        os.unlink(name)
 
 @contextlib.contextmanager
-def temporaryFile(name, mode='w', *args, **kwargs):
-    f = file(name, mode, *args, **kwargs)
-    yield f
-    close(f)
-    os.unlink(name)
-
-@contextlib.contextmanager
-def touchFiles(files):
+def makeTempFiles(files, time=None):
     #create and touch all the files in order with 1 sec
-    #difference between mtimes. argument is a lsit of tuples of file and contents
-    the_time = datetime.datetime.now()
-    to_unlink = list()
-    to_rmdir = list()
-    try:
-        for (name, contents) in files:
-            ## IN MEDIAS: need to make the directories needed (easy,
-            ## use os.path.makedirs) and clean them up afterwards (harder if
-            ## you use makedirs)
-            with file(name, 'w') as f:
-                to_unlink.append(name)
-                if (contents is not None):
-                    f.writelines("\n".join(contents))
-            newtime = time.mktime(the_time.timetuple())
-            os.utime(name, (newtime, newtime))
-            the_time = the_time + datetime.timedelta(0,1)
+    #difference between mtimes. argument is a list of tuples of file and contents
+    #recursively create files.
+    if utime is None:
+        time = datetime.time.now()
+    if length(files) > 0:
+        with tempFileContents(files[-1][0], files[-1][1],
+                              time.mktime(the_time.timetuple())):
+            with tempFiles(files[0:-1], the_time - datetime.timedelta(0,1)):
+                yield
+    else:
         yield
-    finally:
-        for name in reversed(to_unlink):
-            os.unlink(name)
-        for name in reversed(to_rmdir):
-            os.rmdir(name)
+
+@contextlib.contextmanager
+def makeTempFile(name, contents, utime=None):
+    if exists(name):
+        throw Exception("file already exists: {0}".format(name))
+    (dir, base) = os.path.split(foo)
+    with tempDir(dir):
+        with(file(name, 'w')) as f:
+            if (contents is not None):
+                f.writelines("\n".join(contents))
+        os.utime(name, (utime, utime))
+        yield
+        os.unlink(name)
+
+@contextlib.contextmanager
+def changeDir(dir):
+    old_dir = os.getcwd()
+    os.chdir(dir)
+    yield
+    os.chdir(olddir)
+
+@contextlib.contextmanager
+def tempDir(name):
+    if name != "":
+        if os.path.exists(name):
+            if not os.path.isdir(name):
+                raise Exception("Existing path {0}".format(name))
+            yield
+        else:
+            (parent, base) = os.path.split(name)
+            if os.path.split(name)[0] != "":
+                with tempDir(parent):
+                    os.mkdir(dir)
+                    yield
+                else:
+                    os.mkdir(dir)
+                    yield
+                os.rmdir(dir)
 
 class MonkTestCase(unittest.TestCase):
     #the prototypical test case is to create a number of files, a
