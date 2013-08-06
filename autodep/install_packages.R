@@ -4,33 +4,44 @@ options(warn=2)
 #it can't install in the given library, which is totally
 #ridiculous
 
+install.calls <- alist(
+    ptools=install_github,
+    vadr=install_github,
+    install.packages)
+
+install.opts <- alist(
+    ptools = alist(username="crowding"),
+    rstan = alist(repos = c(getOption("repos"),
+                    rstan = "http://wiki.stan.googlecode.com/git/R"),
+        type = "source"),
+    alist())
+
+install.opts.global <- alist(lib=normalizePath(install.dir))
+
 main <- function(install.dir, ...) {
-  if (!"." %in% dir(install.dir, all.files=TRUE)) 
+  library(methods) #workaround; http://bit.ly/10Fw09j
+  if (!require(devtools)) {
+    install.packages(devtools)
+    library(devtools)
+  }
+
+  if (!"." %in% dir(install.dir, all.files=TRUE))
     stop("install.dir is not a real directory")
 
-  # move that to the front for install.github
+  # move that to the front for install.github?
   .libPaths(c(install.dir, .libPaths()))
 
-  packages.i.need <- do.call(Reduce, list(
-    union, c("devtools", lapply(c(...), getLines))))
-  packages.i.github <- c(ptools="ptools")
-  github.user <- c(ptools="crowding")
+  packages.i.need <- do.call(Reduce, list(union, lapply(c(...), getLines)))
   packages.i.have <- .packages(all.available=TRUE)
 
   if (length(setdiff(packages.i.need, packages.i.have)) > 0) {
-    install.packages(setdiff(packages.i.need, packages.i.have),
-                     repos = c(
-                       CRAN = "http://cran.r-project.org/",
-                       RForge="http://R-Forge.R-project.org/"
-                       ),
-                     lib=normalizePath(install.dir))
-  }
-
-  for (i in setdiff(names(packages.i.github), packages.i.have)) {
-    library(methods) #workaround; http://bit.ly/10Fw09j
-    library(devtools)
-    install_github(packages.i.github[[i]],
-                   username=github.user[[i]])
+    for (i in setdiff(packages.i.need, packages.i.have)) {
+      installer.call <- call(do.call(`switch`, c(i, install.calls)))
+      installer.args <- c(do.call(`switch`, c(i, install.opts)),
+                          install.opts.global,
+                          list(i))
+      do.call(installer.call, installer.args)
+    }
   }
 }
 
