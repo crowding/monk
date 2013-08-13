@@ -236,6 +236,18 @@ class MatchedCommand(Command):
                   for i in getList(word.word)]
         return listed + [word.word for word in self.words if word.input]
 
+    def taggedDependencies(self, rules_dict, tagdir):
+        return [self.tagIfTagged(x, rules_dict, tagdir) for x in self.dependencies()]
+
+    def tagIfTagged(self, dep, rules_dict, tagdir):
+        #look up a file and check if it needs to be a tagged file
+        if rules_dict.has_key(dep) and rules_dict[dep].isTagged():
+            rule = rules_dict[dep]
+            firstOutput = [word for word in rule.words if word.output][0]
+            return os.path.join(tagdir, firstOutput.word)
+        else:
+            return dep
+
     def merge(self, *others):
         ##add the words in order. If "once" is used, the first word
         ##determines the flags.  And "once" must be marked on the
@@ -252,19 +264,30 @@ class MatchedCommand(Command):
     def isTagged(self):
         return any([word.tagged for word in self.words if word.output])
 
-    def touchTag(self, tagdir):
+    def touchedfiles(self, tagdir):
+        return " ".join(set(self.taggedProducts(tagdir)))
+
+    def touchPre(self, tagdir):
         if self.isTagged():
-            return ((" && " if self.commandLine() else "\t")
-                    + "touch {0}".format(
-                        " ".join(set(self.taggedProducts(tagdir)))))
+            return ("\ttouch {0}".format(self.touchedfiles(tagdir)) +
+                    ("\n" if self.commandLine() else "")
+                    )
         else:
             return ""
 
-    def makeRule(self, tagdir, **kwargs):
+    def touchPost(self, tagdir):
+        if self.isTagged():
+            return (" || ( rm {0} && false )".format(self.touchedfiles(tagdir))
+                    if self.commandLine() else "")
+        else:
+            return ""
+
+    def makeRule(self, rules_dict, tagdir, **kwargs):
         return (
             "{products}: {dependencies}\n"
             "{mkdir_if_necessary}"
-            "{command_indent}{command}{touch_tag}\n"
+            "{touch_preamble}"
+            "{command_indent}{command}{touch_postamble}\n"
             "\n"
             "{phony_rule}"
             "{intermediate_rule}"
@@ -273,13 +296,15 @@ class MatchedCommand(Command):
             ).format(**
                 { 'products'          : (
                          " ".join(set(self.taggedProducts(tagdir))))
-                , 'dependencies'      : " ".join(set(self.dependencies()))
+                , 'dependencies'      : (
+                      " ".join(set(self.taggedDependencies(rules_dict, tagdir))))
                 , 'command_indent'    : (
                       "\t"
                       if False in [bool(i.invisible) for i in self.words]
                       else "")
                 , 'command'           : self.commandLine()
-                , 'touch_tag'         : self.touchTag(tagdir)
+                , 'touch_preamble'    : self.touchPre(tagdir)
+                , 'touch_postamble'   : self.touchPost(tagdir)
                 , 'phony_rule'        : self.phonyRule()
                 , 'intermediate_rule' : self.intermediateRule()
                 , 'mkdir_if_necessary': self.mkdirCommands(tagdir)
@@ -641,9 +666,12 @@ def goFromString(str):
 def go(**kwargs):
     kwargs.pop("")
     rules = generateRules(**kwargs)
+    rules_dict = dict()
     for r in rules:
         r.setTagged()
-    [print(i.makeRule(**kwargs)) for i in rules]
+        for o in r.products():
+            rules_dict[o] = r;
+    [print(i.makeRule(rules_dict, **kwargs)) for i in rules]
 
 if __name__ == "__main__":
     parser = makeparser()
