@@ -116,7 +116,7 @@ class Word(_AttributeHolder):
     def __init__(self, pattern = "", pattern__ = None, match = False,
                  input = False, output = False, listing = False, once = False,
                  phony = False, intermediate = False, invisible = False,
-                 mkdir = False, tagged = False):
+                 mkdir = False, tagged = False, detagged = False):
         self.pattern      = pattern
         self.pattern__    = pattern__
         self.match        = match
@@ -128,7 +128,8 @@ class Word(_AttributeHolder):
         self.mkdir        = mkdir
         self.intermediate = intermediate
         self.invisible    = invisible
-        self.tagged      = tagged
+        self.tagged       = tagged
+        self.detagged     = detagged
 
 class UnmatchedWord(Word):
     def tryMatch(self, filename):
@@ -212,7 +213,8 @@ class MatchedCommand(Command):
         listings = [word for word in outputs if word.listing]
         if len(outputs) > 1 or len(listings) > 0:
             for output in outputs:
-                output.tagged = True
+                if not output.detagged:
+                    output.tagged = True
 
     def products(self):
         listed = [i
@@ -229,15 +231,22 @@ class MatchedCommand(Command):
         else:
             return self.products()
 
-    def dependencies(self):
+    def detaggedDependencies(self, detagged):
         listed = [i
                   for word in self.words
-                  if word.input and word.listing
+                  if word.input and word.listing and word.detagged == detagged
                   for i in getList(word.word)]
-        return listed + [word.word for word in self.words if word.input]
+        return listed + [word.word for word in self.words
+                         if word.input and word.detagged == detagged]
+
+    def dependencies(self):
+        return (self.detaggedDependencies(True)
+                + self.detaggedDependencies(False))
 
     def taggedDependencies(self, rules_dict, tagdir):
-        return [self.tagIfTagged(x, rules_dict, tagdir) for x in self.dependencies()]
+        return ([self.tagIfTagged(x, rules_dict, tagdir)
+                 for x in self.detaggedDependencies(False)]
+                + self.detaggedDependencies(True))
 
     def tagIfTagged(self, dep, rules_dict, tagdir):
         #look up a file and check if it needs to be a tagged file
@@ -556,6 +565,8 @@ def makeparser():
                         "depending on this step will instead depend on the "
                         "intermediate. This is done by default for any rules "
                         "with multiple outputs (including listing files.)")
+    parser.add_argument('--detagged', action=SetFlag, nargs='*', dest="",
+                        help="Prevent a word from being treated as tagged.")
 
     parser.add_argument('--maxdepth', nargs=1, default=100, type=int,
                         help="The maximum depth of file "

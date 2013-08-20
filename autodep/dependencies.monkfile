@@ -3,17 +3,19 @@
 #Matlab and R scripts will need to have correcponding dependency files
 #fdep is overzealous though, need to limit to what's in the project?
 --command --output --invisible --tagged --match '([^/]*\.[mrR])$'
---input --invisible --listing --tagged 'dependencies/{0}.dep'
+--input --invisible --listing 'dependencies/{0}.dep'
 --invisible --phony --once dependencies
 
 #this computes dependencies for R files
---command Rscript monk/autodep/locate_deps.R {0}
+--command Rscript --input monk/autodep/locate_deps.R
+--input --detagged {0}
 --output --mkdir         dependencies/{0}.pkg
 --output --mkdir --match --tagged 'dependencies/(.*\.[rR]).dep$'
 --invisible --phony dependencies
 
 ##and here's how to dependencies for matlab files.
---command ./monk/autodep/runmatlab dependencies {0}
+--command ./monk/autodep/runmatlab dependencies
+--input --detagged {0}
 --output --mkdir --match --tagged 'dependencies/(.*\.m).dep$'
 --invisible --phony dependencies
 
