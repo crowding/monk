@@ -1,5 +1,6 @@
 #Each R file depends on its dependencies and on having the right packages installed.
 
+# when enabled, no commands are written to produce .R.dep files...
 #Matlab and R scripts will need to have correcponding dependency files
 #fdep is overzealous though, need to limit to what's in the project?
 --command --output --invisible --tagged --match '([^/]*\.[mrR])$'
@@ -7,6 +8,7 @@
 --invisible --phony --once dependencies
 
 #this computes dependencies for R files
+#why is this not making a command output? no warnings about this rule...
 --command Rscript monk/autodep/locate_deps.R {0}
 --output --mkdir         dependencies/{0}.pkg
 --output --mkdir --match --tagged 'dependencies/(.*\.[rR]).dep$'
